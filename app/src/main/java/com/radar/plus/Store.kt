@@ -22,6 +22,17 @@ object Store {
         get() = sp.getString("claude", "") ?: ""
         set(v) { sp.edit().putString("claude", v.trim()).apply() }
 
+    /** "anthropic" (Claude) أو "openai" (OpenRouter وأي مزوّد متوافق مع OpenAI) */
+    var apiFormat: String
+        get() = sp.getString("apifmt", "anthropic") ?: "anthropic"
+        set(v) { sp.edit().putString("apifmt", v).apply() }
+
+    var apiBase: String
+        get() = (sp.getString("apibase", "") ?: "").ifBlank {
+            if (apiFormat == "openai") "https://openrouter.ai/api/v1" else "https://api.anthropic.com"
+        }
+        set(v) { sp.edit().putString("apibase", v.trim()).apply() }
+
     var model: String
         get() = (sp.getString("model", "") ?: "").ifBlank { "claude-sonnet-5-5" }
         set(v) { sp.edit().putString("model", v.trim()).apply() }

@@ -499,6 +499,8 @@ fun SettingsScreen(vm: AppViewModel) {
     var gh by remember { mutableStateOf(Store.ghToken) }
     var key by remember { mutableStateOf(Store.claudeKey) }
     var model by remember { mutableStateOf(Store.model) }
+    var fmt by remember { mutableStateOf(Store.apiFormat) }
+    var base by remember { mutableStateOf(Store.apiBase) }
     var notify by remember { mutableStateOf(Store.notify) }
     var notifyRel by remember { mutableStateOf(Store.notifyReleases) }
     var doms by remember { mutableStateOf(Store.domains) }
@@ -527,9 +529,32 @@ fun SettingsScreen(vm: AppViewModel) {
             singleLine = true, visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth()
         )
+        Text("مزوّد الذكاء الاصطناعي (للشرح والتقارير العربية)", style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = fmt == "anthropic",
+                onClick = { fmt = "anthropic"; base = "https://api.anthropic.com"; model = "claude-sonnet-5-5" },
+                label = { Text("Claude") }
+            )
+            FilterChip(
+                selected = fmt == "openai" && base.contains("openrouter"),
+                onClick = { fmt = "openai"; base = "https://openrouter.ai/api/v1"; model = "nvidia/nemotron-3-ultra-550b-a55b" },
+                label = { Text("OpenRouter") }
+            )
+            FilterChip(
+                selected = fmt == "openai" && !base.contains("openrouter"),
+                onClick = { fmt = "openai"; base = "" },
+                label = { Text("مخصّص") }
+            )
+        }
+        OutlinedTextField(
+            value = base, onValueChange = { base = it },
+            label = { Text("عنوان الخادم (Base URL)") },
+            singleLine = true, modifier = Modifier.fillMaxWidth()
+        )
         OutlinedTextField(
             value = key, onValueChange = { key = it },
-            label = { Text("مفتاح Claude API (للشرح والتقارير العربية)") },
+            label = { Text("مفتاح النموذج (Claude أو OpenRouter أو غيره)") },
             singleLine = true, visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth()
         )
@@ -604,6 +629,7 @@ fun SettingsScreen(vm: AppViewModel) {
 
         Button(onClick = {
             Store.ghToken = gh; Store.claudeKey = key; Store.model = model
+            Store.apiFormat = fmt; Store.apiBase = base
             Store.notify = notify; Store.notifyReleases = notifyRel
             Store.domains = doms; Store.sources = srcs
             Store.trendSince = tsince; Store.trendLang = tlang

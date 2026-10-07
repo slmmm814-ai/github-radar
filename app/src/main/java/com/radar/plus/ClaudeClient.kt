@@ -13,12 +13,23 @@ class ClaudeException(message: String) : Exception(message)
 object ClaudeClient {
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
         .build()
+
+    private fun errorDetail(text: String): String = runCatching {
+        val e = JSONObject(text).opt("error")
+        val m = if (e is JSONObject) e.optString("message") else e?.toString().orEmpty()
+        m.take(160)
+    }.getOrDefault("")
 
     fun ask(system: String, user: String, maxTokens: Int = 1500): String {
         val key = Store.claudeKey
-        if (key.isBlank()) throw ClaudeException("أضف مفتاح Claude API في الإعدادات للحصول على الشرح العربي.")
+        if (key.isBlank()) throw ClaudeException("أضف مفتاح النموذج في الإعدادات للحصول على الشرح العربي.")
+        return if (Store.apiFormat == "openai") askOpenAi(key, system, user, maxTokens)
+        else askAnthropic(key, system, user, maxTokens)
+    }
+
+    private fun askAnthropic(key: String, system: String, user: String, maxTokens: Int): String {
         val body = JSONObject()
             .put("model", Store.model)
             .put("max_tokens", maxTokens)
@@ -26,7 +37,7 @@ object ClaudeClient {
             .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", user)))
             .toString()
         val req = Request.Builder()
-            .url("https://api.anthropic.com/v1/messages")
+            .url(Store.apiBase.trimEnd('/') + "/v1/messages")
             .header("x-api-key", key)
             .header("anthropic-version", "2023-06-01")
             .post(body.toRequestBody("application/json".toMediaType()))
@@ -34,7 +45,7 @@ object ClaudeClient {
         client.newCall(req).execute().use { r ->
             val text = r.body?.string().orEmpty()
             if (!r.isSuccessful) {
-                throw ClaudeException("خطأ من Claude (${r.code}). تحقق من المفتاح واسم النموذج في الإعدادات.")
+                throw ClaudeException("خطأ من المزوّد (${r.code}): ${errorDetail(text)}")
             }
             val arr = JSONObject(text).getJSONArray("content")
             return (0 until arr.length())
@@ -42,6 +53,40 @@ object ClaudeClient {
                 .filter { it.optString("type") == "text" }
                 .joinToString("\n") { it.getString("text") }
                 .trim()
+        }
+    }
+
+    /** واجهة OpenAI-compatible (OpenRouter وغيره). نماذج التفكير تستهلك جزءًا من الحد، فنضاعفه. */
+    private fun askOpenAi(key: String, system: String, user: String, maxTokens: Int): String {
+        val msgs = JSONArray()
+            .put(JSONObject().put("role", "system").put("content", system))
+            .put(JSONObject().put("role", "user").put("content", user))
+        val body = JSONObject()
+            .put("model", Store.model)
+            .put("messages", msgs)
+            .put("max_tokens", maxOf(maxTokens * 2, 3000))
+            .toString()
+        val req = Request.Builder()
+            .url(Store.apiBase.trimEnd('/') + "/chat/completions")
+            .header("Authorization", "Bearer $key")
+            .header("HTTP-Referer", "https://github.com/slmmm814-ai/github-radar")
+            .header("X-Title", "Radar GitHub+")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(req).execute().use { r ->
+            val text = r.body?.string().orEmpty()
+            if (!r.isSuccessful) {
+                throw ClaudeException("خطأ من المزوّد (${r.code}): ${errorDetail(text)}")
+            }
+            val msg = JSONObject(text).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")
+            val content = msg?.opt("content")
+            val out = when (content) {
+                is String -> content
+                is JSONArray -> (0 until content.length()).joinToString("") { content.optJSONObject(it)?.optString("text").orEmpty() }
+                else -> ""
+            }.trim()
+            if (out.isBlank()) throw ClaudeException("رد فارغ من النموذج (ربما استهلك الحد في التفكير). جرّب نموذجًا آخر.")
+            return out
         }
     }
 }
