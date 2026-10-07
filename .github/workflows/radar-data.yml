@@ -1,0 +1,33 @@
+name: radar-data
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: radar-data
+  cancel-in-progress: false
+jobs:
+  data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: radar.db
+          key: radar-db-${{ github.run_id }}
+          restore-keys: radar-db-
+      - run: python3 radar-server/radar_server.py --export out/trending.json
+        env:
+          RADAR_DB: radar.db
+      - name: publish
+        working-directory: out
+        run: |
+          git init -q -b data
+          git config user.name radar
+          git config user.email radar@users.noreply.github.com
+          git add -A
+          git commit -qm "data"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" data
