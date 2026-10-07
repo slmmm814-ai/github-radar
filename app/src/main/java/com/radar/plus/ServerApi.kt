@@ -18,7 +18,7 @@ object ServerApi {
         val base = Store.serverUrl.trim().trimEnd('/')
         if (base.isBlank()) return emptyList()
         // رابط ملف JSON ثابت (مثل raw.githubusercontent.com/.../trending.json) أو خادم الرادار
-        val url = if (base.endsWith(".json")) base else "$base/trending?window=$window&limit=$limit&min_stars=10&sort=heat"
+        val url = if (base.endsWith(".json")) base else "$base/trending?window=$window&limit=$limit&min_stars=5&sort=heat"
         val b = Request.Builder().url(url)
         if (Store.serverKey.isNotBlank()) b.header("X-Api-Key", Store.serverKey)
         client.newCall(b.build()).execute().use { r ->

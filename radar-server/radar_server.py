@@ -28,7 +28,7 @@ API_KEY = os.environ.get("RADAR_KEY", "")
 BACKFILL = int(os.environ.get("RADAR_BACKFILL_HOURS", "48"))        # ساعات الجلب عند أول تشغيل
 RETENTION_DAYS = int(os.environ.get("RADAR_RETENTION_DAYS", "14"))  # مدة الاحتفاظ
 LAG = int(os.environ.get("RADAR_LAG_HOURS", "2"))                   # تأخير نشر GH Archive للملف
-MIN_HOURLY = int(os.environ.get("RADAR_MIN_HOURLY", "3"))           # أقل نجوم/تفرّعات في الساعة ليُخزَّن المستودع
+MIN_HOURLY = int(os.environ.get("RADAR_MIN_HOURLY", "1"))           # أقل نجوم/تفرّعات في الساعة ليُخزَّن المستودع
 PORT = int(os.environ.get("PORT", "8787"))
 INTERVAL = int(os.environ.get("RADAR_INTERVAL_SECONDS", "900"))     # فاصل فحص الملفات الجديدة
 
@@ -162,7 +162,7 @@ def anchor(conn):
 
 def trending(conn, window=24, limit=30, min_stars=10, sort="heat"):
     """نجوم آخر `window` ساعة مقابل النافذة السابقة لها.
-    accel = نجوم النافذة الحالية / max(نجوم السابقة, window)، فالأرضية تعوّض أن الساعات تحت العتبة غير مخزَّنة."""
+    accel = نجوم النافذة الحالية / max(نجوم السابقة, floor)، وfloor يعوّض أن الساعات تحت العتبة غير مخزَّنة."""
     a = anchor(conn)
     if a is None:
         return {"anchor": None, "items": []}
@@ -182,7 +182,8 @@ def trending(conn, window=24, limit=30, min_stars=10, sort="heat"):
     ).fetchall()
     items = []
     for repo, cs, cfk, ps in rows:
-        accel = round(cs / max(ps, window), 2) if prev_ok else None
+        floor = max(1, window * (MIN_HOURLY - 1) / 2)
+        accel = round(cs / max(ps, floor), 2) if prev_ok else None
         heat = cs * (1 + math.log(min(accel, 50))) if accel and accel > 1 else cs
         items.append({
             "repo": repo, "stars": cs, "forks": cfk,
@@ -296,7 +297,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(500, {"error": "server error"})
 
 
-def export(path, window=24, limit=50, min_stars=10):
+def export(path, window=24, limit=50, min_stars=5):
     """يكتب نتيجة /trending في ملف JSON ثابت (للنشر عبر GitHub Actions بلا خادم)."""
     conn = db()
     res = trending(conn, window, limit, min_stars, "heat")

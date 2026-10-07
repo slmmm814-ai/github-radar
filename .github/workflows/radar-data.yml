@@ -17,8 +17,8 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: radar.db
-          key: radar-db2-${{ github.run_id }}
-          restore-keys: radar-db2-
+          key: radar-db3-${{ github.run_id }}
+          restore-keys: radar-db3-
       - run: |
           mkdir -p out
           python3 radar-server/radar_server.py --export out/trending.json 2>&1 | tee out/ingest.log
