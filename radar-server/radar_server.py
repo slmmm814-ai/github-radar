@@ -83,9 +83,12 @@ def ingest_hour(conn, h):
             return None
         raise
     stars, forks = {}, {}
+    lines_seen = 0
+    size = resp.headers.get("Content-Length", "?")
     with resp:
         with gzip.GzipFile(fileobj=resp) as gz:
             for line in gz:
+                lines_seen += 1
                 # فحص رخيص قبل التحليل؛ ثم نتحقق من النوع بعد json.loads لتفادي الإيجابيات الكاذبة
                 if b"WatchEvent" in line:
                     kind, target = "WatchEvent", stars
@@ -101,6 +104,7 @@ def ingest_hour(conn, h):
                 except (ValueError, KeyError, TypeError):
                     continue
                 target[name] = target.get(name, 0) + 1
+    log(f"  {iso(h)}: حجم الملف {size} بايت، {lines_seen} حدثًا، {sum(stars.values())} نجمة، {sum(forks.values())} تفرّعًا")
     rows = []
     for n in set(stars) | set(forks):
         s, f = stars.get(n, 0), forks.get(n, 0)
